@@ -1,0 +1,2 @@
+# AppenderGraylog-QuickLogger
+ 
