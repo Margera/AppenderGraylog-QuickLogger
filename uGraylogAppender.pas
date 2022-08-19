@@ -4,6 +4,7 @@ interface
 
 uses
   System.SysUtils,
+  uFuncoesJson,
   System.Generics.Collections,
   Quick.Logger,
   Quick.Logger.Provider.GrayLog;
@@ -25,7 +26,7 @@ type
    TGraylogAppender = class
    public
      constructor Create(sGraylogHost: string; iGraylogPort: integer);
-     procedure Info(const cMsg: string); overload;
+//     procedure Info(const cMsg: string); overload;
      procedure Info(const cMsg: string; aFields: TFields = nil); overload;
 //     procedure Warn(const cMsg: string); overload;
 //     procedure Warn(const cMsg: string; cValues : array of const); overload;
@@ -112,15 +113,16 @@ begin
    inherited Create;
 end;
 
-procedure TGraylogAppender.Info(const cMsg: string);
-begin
-   Logger.Info(cMsg);
-end;
+//procedure TGraylogAppender.Info(const cMsg: string);
+//begin
+//   Logger.Info(cMsg);
+//end;
 
 procedure TGraylogAppender.Info(const cMsg: string; aFields: TFields);
 begin
+//   Logger.Info(cMsg);
 
-   Logger.Info();
+   WriteLog(cMsg, aFields);
 end;
 
 procedure TGraylogAppender.WriteLog(cLogItem: TLogItem);
@@ -131,29 +133,21 @@ var
 begin
   json := TJSONObject.Create;
   try
-    json.{$IFDEF FPC}Add{$ELSE}AddPair{$ENDIF}('version',fGrayLogVersion);
-    json.{$IFDEF FPC}Add{$ELSE}AddPair{$ENDIF}('host',SystemInfo.HostName);
+    json.Add('version',fGrayLogVersion);
+    json.Add('host',SystemInfo.HostName);
     if fShortMessageAsEventType then
     begin
-      json.{$IFDEF FPC}Add{$ELSE}AddPair{$ENDIF}('short_message',EventTypeName[cLogItem.EventType]);
-      json.{$IFDEF FPC}Add{$ELSE}AddPair{$ENDIF}('full_message',cLogItem.Msg);
+      json.Add('short_message',EventTypeName[cLogItem.EventType]);
+      json.Add('full_message',cLogItem.Msg);
     end
     else
     begin
-      json.{$IFDEF FPC}Add{$ELSE}AddPair{$ENDIF}('type',EventTypeName[cLogItem.EventType]);
-      json.{$IFDEF FPC}Add{$ELSE}AddPair{$ENDIF}('short_message',cLogItem.Msg);
+      json.Add('type',EventTypeName[cLogItem.EventType]);
+      json.Add('short_message',cLogItem.Msg);
     end;
-    {$IFDEF FPC}
-      json.Add('timestamp',TJSONInt64Number.Create(DateTimeToUnix(cLogItem.EventDate)));
-      json.Add('level',TJSONInt64Number.Create(EventTypeToSysLogLevel(cLogItem.EventType)));
-    {$ELSE}
-      {$IFDEF DELPHIXE7_UP}
-      json.AddPair('timestamp',TJSONNumber.Create(DateTimeToUnix(cLogItem.EventDate,fJsonOutputOptions.UseUTCTime)));
-      {$ELSE}
-      json.AddPair('timestamp',TJSONNumber.Create(DateTimeToUnix(cLogItem.EventDate)));
-      {$ENDIF}
-      json.AddPair('level',TJSONNumber.Create(EventTypeToSysLogLevel(cLogItem.EventType)));
-    {$ENDIF}
+
+   json.Add('timestamp',TJSONInt64Number.Create(DateTimeToUnix(cLogItem.EventDate)));
+   json.Add('level',TJSONInt64Number.Create(EventTypeToSysLogLevel(cLogItem.EventType)));
 
     if iiAppName in IncludedInfo then json.{$IFDEF FPC}Add{$ELSE}AddPair{$ENDIF}('_application',AppName);
     if iiEnvironment in IncludedInfo then json.{$IFDEF FPC}Add{$ELSE}AddPair{$ENDIF}('_environment',Environment);
