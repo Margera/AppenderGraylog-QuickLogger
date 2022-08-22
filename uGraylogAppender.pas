@@ -5,23 +5,25 @@ interface
 uses
   System.SysUtils,
   uFuncoesJson,
+  System.Variants,
   System.Generics.Collections,
   Quick.Logger,
   Quick.Logger.Provider.GrayLog;
 
 type
-  TFields = class
-  private
-    fField : TDictionary<string,Variant>;
-    function GetTag(const aKey: string) : Variant;
-    procedure SetTag(const aKey: string; const aValue: Variant);
-  public
-    constructor Create;
-    destructor Destroy; override;
-    property Items[const Key: string]: Variant read GetTag write SetTag; default;
-    function TryGetValue(const aKey : string; out oValue: Variant) : Boolean;
-    procedure Add(const aKey: string; aValue: Variant);
-  end;
+  TFields = TDictionary<string,Variant>; 
+//  TFields = class
+//  private
+//    fField : TDictionary<string,Variant>;
+//    function GetTag(const aKey: string) : Variant;
+//    procedure SetTag(const aKey: string; const aValue: Variant);
+//  public
+//    constructor Create;
+//    destructor Destroy; override;
+//    property Items[const Key: string]: Variant read GetTag write SetTag; default;
+//    function TryGetValue(const aKey : string; out oValue: Variant) : Boolean;
+//    procedure Add(const aKey: string; aValue: Variant);
+//  end;
 
    TGraylogAppender = class
    public
@@ -46,44 +48,45 @@ type
 //     procedure &Except(const cMsg: string; cValues: array of const); overload;
 //     procedure &Except(const cMsg, cException, cStackTrace: string); overload;
 //     procedure &Except(const cMsg: string; cValues: array of const; const cException, cStackTrace: string); overload;
-      procedure WriteLog();
+     procedure WriteLog(cMsg: string; aFields: TFields; event: TEventType);
    end;
 
 implementation
 
+
 { TFields }
 
-constructor TFields.Create;
-begin
-   fField := TDictionary<string,Variant>.Create;
-end;
-
-destructor TFields.Destroy;
-begin
-   fField.Free;
-   inherited;
-end;
-
-procedure TFields.Add(const aKey: string; aValue: Variant);
-begin
-   fField.Add(aKey.ToUpper,aValue);
-end;
-
-function TFields.GetTag(const aKey: string): Variant;
-begin
-   if not fField.TryGetValue(aKey,Result) then
-      raise Exception.CreateFmt('Log Tag "%s" not found!',[aKey]);
-end;
-
-procedure TFields.SetTag(const aKey: string; const aValue: Variant);
-begin
-   fField.AddOrSetValue(aKey.ToUpper, aValue);
-end;
-
-function TFields.TryGetValue(const aKey : string; out oValue : Variant): Boolean;
-begin
-   Result := fField.TryGetValue(aKey.ToUpper, oValue);
-end;
+//constructor TFields.Create;
+//begin
+//   fField := TDictionary<string,Variant>.Create;
+//end;
+//
+//destructor TFields.Destroy;
+//begin
+//   fField.Free;
+//   inherited;
+//end;
+//
+//procedure TFields.Add(const aKey: string; aValue: Variant);
+//begin
+//   fField.Add(aKey.ToUpper,aValue);
+//end;
+//
+//function TFields.GetTag(const aKey: string): Variant;
+//begin
+//   if not fField.TryGetValue(aKey,Result) then
+//      raise Exception.CreateFmt('Log Tag "%s" not found!',[aKey]);
+//end;
+//
+//procedure TFields.SetTag(const aKey: string; const aValue: Variant);
+//begin
+//   fField.AddOrSetValue(aKey.ToUpper, aValue);
+//end;
+//
+//function TFields.TryGetValue(const aKey : string; out oValue : Variant): Boolean;
+//begin
+//   Result := fField.TryGetValue(aKey.ToUpper, oValue);
+//end;
 
 { TGraylogAppender }
 
@@ -105,6 +108,8 @@ begin
       AppName := 'APIv2';
       IncludedInfo := [iiAppName,iiEnvironment,iiPlatform];
       Enabled := True;
+
+      CustomMsgOutput := True;
    end;
 
 //   Logger.RedirectOwnErrorsToProvider := GlobalLogFileProvider;
@@ -121,59 +126,59 @@ end;
 procedure TGraylogAppender.Info(const cMsg: string; aFields: TFields);
 begin
 //   Logger.Info(cMsg);
-
-   WriteLog(cMsg, aFields);
+//   Logger.Add();
+   WriteLog(cMsg, aFields, etInfo);
 end;
 
-procedure TGraylogAppender.WriteLog(cLogItem: TLogItem);
+procedure TGraylogAppender.WriteLog(cMsg: string; aFields: TFields; event: TEventType);
 var
   json : TJSONObject;
   tagName : string;
-  tagValue : string;
+  tagValue : Variant;
+  i: Integer;
+
+  enumerator: TPair<string, Variant>;
 begin
-  json := TJSONObject.Create;
-  try
-    json.Add('version',fGrayLogVersion);
-    json.Add('host',SystemInfo.HostName);
-    if fShortMessageAsEventType then
-    begin
-      json.Add('short_message',EventTypeName[cLogItem.EventType]);
-      json.Add('full_message',cLogItem.Msg);
-    end
-    else
-    begin
-      json.Add('type',EventTypeName[cLogItem.EventType]);
-      json.Add('short_message',cLogItem.Msg);
-    end;
+   json := TJSONObject.Create;
+   try
+      if aFields <> nil then
+      begin
+         for enumerator in aFields do
+         begin
+            if aFields.TryGetValue(enumerator.Key, tagValue) then
+            begin
+               if VarType(tagValue) = varInteger then
+                  json.AlterarInserirCampo(enumerator.Key, VarToStr(tagValue))
+               else
+                  json.AlterarInserirCampo(enumerator.Key, StrToIntDef(tagValue,0));
+            end;
+         end;
+      end;
 
-   json.Add('timestamp',TJSONInt64Number.Create(DateTimeToUnix(cLogItem.EventDate)));
-   json.Add('level',TJSONInt64Number.Create(EventTypeToSysLogLevel(cLogItem.EventType)));
+    json.Add('version', Logger.GetVersion);
+//    json.Add('host',SystemInfo.HostName);
+//    if fShortMessageAsEventType then
+//    begin
+//      json.Add('short_message',EventTypeName[cLogItem.EventType]);
+//      json.Add('full_message',cLogItem.Msg);
+//    end
+//    else
+//    begin
+//      json.Add('type',EventTypeName[cLogItem.EventType]);
+      json.Add('short_message', cMsg);
+//    end;
 
-    if iiAppName in IncludedInfo then json.{$IFDEF FPC}Add{$ELSE}AddPair{$ENDIF}('_application',AppName);
-    if iiEnvironment in IncludedInfo then json.{$IFDEF FPC}Add{$ELSE}AddPair{$ENDIF}('_environment',Environment);
-    if iiPlatform in IncludedInfo then json.{$IFDEF FPC}Add{$ELSE}AddPair{$ENDIF}('_platform',PlatformInfo);
-    if iiOSVersion in IncludedInfo then json.{$IFDEF FPC}Add{$ELSE}AddPair{$ENDIF}('_OS',SystemInfo.OSVersion);
-    if iiUserName in IncludedInfo then json.{$IFDEF FPC}Add{$ELSE}AddPair{$ENDIF}('_user',SystemInfo.UserName);
-    if iiThreadId in IncludedInfo then json.{$IFDEF FPC}Add{$ELSE}AddPair{$ENDIF}('_treadid',cLogItem.ThreadId.ToString);
-    if iiProcessId in IncludedInfo then json.{$IFDEF FPC}Add{$ELSE}AddPair{$ENDIF}('_pid',SystemInfo.ProcessId.ToString);
+//   json.Add('timestamp',TJSONInt64Number.Create(DateTimeToUnix(cLogItem.EventDate)));
+//   json.Add('level',TJSONInt64Number.Create(EventTypeToSysLogLevel(cLogItem.EventType)));
 
-    for tagName in IncludedTags do
-    begin
-      if fCustomTags.TryGetValue(tagName,tagValue) then json.{$IFDEF FPC}Add{$ELSE}AddPair{$ENDIF}(tagName,tagValue);
-    end;
+//    json.Add('_application',Logger.Providers.First. AppName);
+//    json.Add('_environment',Environment);
+//    json.Add('_platform',PlatformInfo);
 
-    {$IFDEF DELPHIXE8_UP}
-    Result := json.ToJSON
-    {$ELSE}
-      {$IFDEF FPC}
-      Result := json.AsJSON;
-      {$ELSE}
-      Result := json.ToString;
-      {$ENDIF}
-    {$ENDIF}
-  finally
-    json.Free;
-  end;
+      Logger.Add(json.ToString, event);
+   finally
+      json.Free;
+   end;
 end;
 
 end.
